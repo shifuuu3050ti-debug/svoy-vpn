@@ -1,0 +1,38 @@
+name: Check iPhone build
+
+on:
+  push:
+    branches: [codex/ios-build]
+    paths: [.github/workflows/ios-check.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 12
+    steps:
+      - name: Download and verify iPhone sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download ios-v0.1.0 --repo "$GITHUB_REPOSITORY" --pattern SvoyVPN-iOS-source.zip
+          printf '%s  %s\n' 'a8c3024c22f6c7c8b2e01cca497c1a74797e0979df38a537dd816c1b5add7581' SvoyVPN-iOS-source.zip | shasum -a 256 -c -
+          unzip -q SvoyVPN-iOS-source.zip
+      - name: Prepare build tools
+        run: |
+          xcodebuild -version
+          if ! go env GOVERSION | grep -q '^go1\.26\.'; then
+            brew install go@1.26
+            echo "$(brew --prefix go@1.26)/bin" >> "$GITHUB_PATH"
+          fi
+          if ! command -v xcodegen >/dev/null; then
+            brew install xcodegen
+          fi
+      - name: Compile and verify VPN extension
+        run: |
+          bash ios/build.sh unsigned
+          app=ios/.vendor/DerivedData/Build/Products/Debug-iphoneos/SvoyVPN.app
+          test -f "$app/SvoyVPN"
+          test -f "$app/PlugIns/PacketTunnel.appex/PacketTunnel"
